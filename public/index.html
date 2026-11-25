@@ -12,7 +12,8 @@
 <script src="/static/common/tdesign/1.15.2/tdesign.min.js"></script>
 <script src="/static/admin/js/axios.min.js"></script>
 <style>
-  body { margin:0; font-family: system-ui, sans-serif; background:#f7f9fc; }
+  body { margin:0; font-family: system-ui, sans-serif; background:#f7f9fc; overflow-x:hidden; }
+  .t-layout, .t-content, .main-content { min-width:0; }
   /* 焦点态收敛：干掉默认蓝色方框，输入类保留淡色提示 */
   *:focus, *:focus-visible { outline: none !important; box-shadow: none !important; }
   .t-input__wrap:focus-within, .t-textarea__wrap:focus-within { box-shadow: 0 0 0 2px rgba(84,124,255,.15) !important; }
@@ -32,6 +33,7 @@
   .kpi.warn .v { color:#e37318; }
   /* 移动端适配 */
   .mobile-only { display:none; }
+  .mobile-only .t-head-menu { width:max-content; min-width:100%; }
   @media (max-width: 768px) {
     .desktop-side { display:none !important; }
     .mobile-only { display:block; }
@@ -39,6 +41,8 @@
     .kpi-row { gap:8px; }
     .kpi { min-width: calc(50% - 4px); padding:12px 14px; }
     .kpi .v { font-size:19px; }
+    .mobile-only .t-menu__item { padding:0 12px; font-size:13px; height:44px; }
+    .t-table__content { overflow-x:auto !important; }
     .login-card { width:92vw; max-width:360px; padding:32px 22px; }
     .t-dialog__card { max-width:92vw !important; }
     .t-table { font-size:12px; }
@@ -84,7 +88,7 @@
   <!-- 主界面 -->
   <div v-else style="min-height:100vh">
     <!-- 移动端顶栏（≥768px CSS 隐藏；独立于 layout，避免 flex 横排崩坏） -->
-    <div class="mobile-only" style="position:sticky;top:0;z-index:10">
+    <div class="mobile-only" style="position:sticky;top:0;z-index:10;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100vw">
       <t-head-menu :value="activePage" @change="onMenu">
         <template #logo><span class="side-logo" style="padding:0 4px"><svg width="22" height="22"><use href="#apartment-mark"/></svg>{{ BRAND }}</span></template>
         <t-menu-item value="home">概览</t-menu-item>
