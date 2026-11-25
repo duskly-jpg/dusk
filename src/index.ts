@@ -401,6 +401,14 @@ app.post('/api/readings', async (c: any) => {
   return OK(c, { id: r.meta.last_row_id, cost, rate });
 });
 
+// ---------- 流水列表（概览页最近收支） ----------
+app.get('/api/ledger', async (c: any) => {
+  const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
+  const r = await c.env.DB.prepare(`SELECT id,building_id,direction,category,amount,booked_on,note
+    FROM ledger ORDER BY booked_on DESC, id DESC LIMIT ?`).bind(limit).all();
+  return OK(c, r.results);
+});
+
 // ---------- 仪表盘 ----------
 app.get('/api/dashboard', async (c: any) => {
   const ym = today().slice(0, 7);
