@@ -1,0 +1,12 @@
+{
+  "name": "dusk",
+  "compatibility_date": "2026-11-01",
+  "main": "src/index.ts",
+  "assets": { "directory": "public", "not_found_handling": "single-page-application" },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "rent8", "database_id": "<your-d1-database-id>" }
+  ],
+  "routes": [
+    { "pattern": "app.example.com/*", "zone_name": "example.com" }
+  ]
+}

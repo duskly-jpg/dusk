@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Dusk · 出租屋管理</title>
+<link rel="icon" type="image/svg+xml"
+  href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect x='1' y='1' width='46' height='46' rx='12' fill='%23EAF2FF'/%3E%3Crect x='14' y='10' width='20' height='28' rx='2' fill='%23B7D3FB'/%3E%3Crect x='7' y='20' width='7' height='18' rx='1.5' fill='%239BC0F2'/%3E%3Crect x='34' y='16' width='7' height='22' rx='1.5' fill='%239BC0F2'/%3E%3Crect x='21' y='33' width='6' height='5' rx='1' fill='%2335507A'/%3E%3Crect x='18' y='14' width='4' height='4' rx='1' fill='%23fff'/%3E%3Crect x='26' y='14' width='4' height='4' rx='1' fill='%23fff'/%3E%3Crect x='18' y='21' width='4' height='4' rx='1' fill='%23fff'/%3E%3Crect x='26' y='21' width='4' height='4' rx='1' fill='%23fff'/%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/common/tdesign/1.15.2/tdesign.min.css">
+<link rel="stylesheet" href="/static/common/tdesign-icons/0.2.2/index.min.css">
+<script src="/static/common/vue/3.4.19/vue.global.js"></script>
+<script src="/static/common/tdesign/1.15.2/tdesign.min.js"></script>
+<script src="/static/admin/js/axios.min.js"></script>
+<style>
+  body { margin:0; font-family: system-ui, sans-serif; }
+  .login-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; background:linear-gradient(135deg,#eef3ff,#f7f9fc); }
+  .login-card { width:360px; padding:40px 36px; background:#fff; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.08); }
+  .logo { text-align:center; font-size:22px; font-weight:700; color:#0052d9; margin-bottom:6px; }
+  .logo-sub { text-align:center; font-size:13px; color:#888; margin-bottom:24px; }
+  .side-logo { font-weight:700; font-size:17px; color:#0052d9; padding:0 8px; white-space:nowrap; display:inline-flex; align-items:center; gap:8px; }
+  .logo-row { display:inline-flex; align-items:center; gap:10px; justify-content:center; }
+</style>
+</head>
+<body>
+<!-- 浅色系公寓 LOGO（自绘 SVG，专属） -->
+<svg id="logo-defs" width="0" height="0" style="position:absolute">
+  <defs>
+    <g id="apartment-mark">
+      <rect x="1" y="1" width="46" height="46" rx="12" fill="#EAF2FF"/>
+      <rect x="14" y="10" width="20" height="28" rx="2" fill="#B7D3FB"/>
+      <rect x="7" y="20" width="7" height="18" rx="1.5" fill="#9BC0F2"/>
+      <rect x="34" y="16" width="7" height="22" rx="1.5" fill="#9BC0F2"/>
+      <rect x="18" y="14" width="4" height="4" rx="1" fill="#FFFFFF"/><rect x="26" y="14" width="4" height="4" rx="1" fill="#FFFFFF"/>
+      <rect x="18" y="21" width="4" height="4" rx="1" fill="#FFFFFF"/><rect x="26" y="21" width="4" height="4" rx="1" fill="#FFFFFF"/>
+      <rect x="18" y="28" width="4" height="4" rx="1" fill="#FFFFFF"/><rect x="26" y="28" width="4" height="4" rx="1" fill="#FFFFFF"/>
+      <rect x="21" y="33" width="6" height="5" rx="1" fill="#35507A"/>
+      <rect x="9" y="24" width="3" height="3" rx="0.5" fill="#FFFFFF"/><rect x="36" y="20" width="3" height="3" rx="0.5" fill="#FFFFFF"/><rect x="36" y="27" width="3" height="3" rx="0.5" fill="#FFFFFF"/>
+    </g>
+  </defs>
+</svg>
+<div id="app">
+  <!-- 登录 -->
+  <div v-if="!logged" class="login-wrap">
+    <div class="login-card">
+      <div class="logo logo-row"><svg width="40" height="40"><use href="#apartment-mark"/></svg>{{ BRAND }}</div>
+      <div class="logo-sub">专属出租屋管理系统</div>
+      <t-form v-if="!needSetup" @submit="doLogin">
+        <t-form-item label="账号"><t-input v-model="form.username" placeholder="账号" clearable/></t-form-item>
+        <t-form-item label="密码"><t-input v-model="form.password" type="password" placeholder="密码" clearable/></t-form-item>
+        <t-button block theme="primary" type="submit" :loading="loading">登 录</t-button>
+      </t-form>
+      <t-form v-else @submit="doSetup">
+        <t-alert theme="info" message="首次使用，设置管理员账号" style="margin-bottom:16px"/>
+        <t-form-item label="账号"><t-input v-model="form.username" placeholder="管理员账号" clearable/></t-form-item>
+        <t-form-item label="密码"><t-input v-model="form.password" type="password" placeholder="密码（≥8位）" clearable/></t-form-item>
+        <t-button block theme="primary" type="submit" :loading="loading">初始化</t-button>
+      </t-form>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <t-layout v-else style="min-height:100vh">
+    <t-aside width="220px">
+      <t-menu :value="activePage" style="height:100vh" @change="onMenu">
+        <template #logo><span class="side-logo"><svg width="26" height="26"><use href="#apartment-mark"/></svg>{{ BRAND }}</span></template>
+        <template v-for="m in menus" :key="m.id">
+          <t-submenu v-if="m.children && m.children.length" :value="String(m.id)">
+            <template #icon><t-icon :name="m.icon || 'app'"/></template>
+            <template #title>{{ m.name }}</template>
+            <t-menu-item v-for="ch in m.children" :key="ch.id" :value="ch.controller" :icon="undefined">{{ ch.name }}</t-menu-item>
+          </t-submenu>
+          <t-menu-item v-else :value="m.controller"><template #icon><t-icon :name="m.icon || 'app'"/></template>{{ m.name }}</t-menu-item>
+        </template>
+        <template #operations>
+          <t-button block variant="outline" @click="doLogout">退出登录</t-button>
+        </template>
+      </t-menu>
+    </t-aside>
+    <t-layout>
+      <t-content style="padding:20px; background:#f4f6f9;">
+        <!-- 房产管理 -->
+        <div v-if="activePage==='house.property'">
+          <t-space style="margin-bottom:12px">
+            <t-button theme="primary" @click="openProperty()">新增房产</t-button>
+          </t-space>
+          <t-table row-key="id" :data="properties" :columns="propCols">
+            <template #ops="{row}">
+              <t-space size="8px">
+                <t-link theme="primary" @click="openProperty(row)">编辑</t-link>
+                <t-popconfirm content="确认删除该房产？" @confirm="delProperty(row.id)"><t-link theme="danger">删除</t-link></t-popconfirm>
+              </t-space>
+            </template>
+          </t-table>
+        </div>
+        <!-- 房间管理 -->
+        <div v-else-if="activePage==='house.number'">
+          <t-space style="margin-bottom:12px">
+            <t-select v-model="numPid" placeholder="全部房产" clearable style="width:180px" @change="loadNumbers">
+              <t-option v-for="p in properties" :key="p.id" :value="p.id" :label="p.name_show || p.name"/>
+            </t-select>
+            <t-button theme="primary" @click="openNumber()">新增房间</t-button>
+          </t-space>
+          <t-table row-key="id" :data="numbers" :columns="numCols">
+            <template #state="{row}">
+              <t-tag v-if="row.tenant_message_id" theme="success">在租</t-tag>
+              <t-tag v-else theme="default">闲置</t-tag>
+            </template>
+            <template #ops="{row}">
+              <t-space size="8px">
+                <t-link theme="primary" @click="openNumber(row)">编辑</t-link>
+                <t-link v-if="!row.tenant_message_id" theme="success" @click="openCheckin(row)">入住</t-link>
+                <t-popconfirm v-else content="确认办理退房？" @confirm="checkout(row.id)"><t-link theme="warning">退房</t-link></t-popconfirm>
+                <t-link theme="primary" @click="openBill(row)">出账</t-link>
+                <t-popconfirm v-if="!row.tenant_message_id" content="确认删除该房间？" @confirm="delNumber(row.id)"><t-link theme="danger">删除</t-link></t-popconfirm>
+              </t-space>
+            </template>
+          </t-table>
+        </div>
+        <!-- 未收/到账账单 -->
+        <div v-else-if="activePage==='house.uncollected' || activePage==='house.collected'">
+          <div style="margin-bottom:12px; display:flex; justify-content:space-between">
+            <b>{{ activePage==='house.uncollected' ? '未收账单' : '到账账单' }}</b>
+            <span>合计：<b style="color:#e37318">¥{{ receiptSum }}</b></span>
+          </div>
+          <t-table row-key="id" :data="receipts" :columns="receiptCols">
+            <template #bill_type="{row}">
+              <t-tag :theme="row.bill_type==='A' ? 'primary' : (row.bill_type==='B' ? 'danger' : 'default')">
+                {{ row.bill_type==='A' ? '房租' : (row.bill_type==='B' ? '逾期' : '退房') }}
+              </t-tag>
+            </template>
+            <template #ops="{row}">
+              <t-space size="8px">
+                <t-popconfirm v-if="activePage==='house.uncollected'" content="确认已收到该笔款项？" @confirm="accounting(row.id)"><t-link theme="success">到账确认</t-link></t-popconfirm>
+                <t-popconfirm v-if="activePage==='house.uncollected'" content="确认删除该账单？" @confirm="delReceipt(row.id)"><t-link theme="danger">删除</t-link></t-popconfirm>
+              </t-space>
+            </template>
+          </t-table>
+        </div>
+        <!-- 其他支出 -->
+        <div v-else-if="activePage==='house.other'">
+          <t-space style="margin-bottom:12px">
+            <t-button theme="primary" @click="otherVisible=true">新增支出</t-button>
+          </t-space>
+          <t-table row-key="id" :data="others" :columns="otherCols">
+            <template #ops="{row}">
+              <t-space size="8px">
+                <t-popconfirm v-if="row.accout_mark!=='Y'" content="确认到账？循环支出将自动生成下月记录" @confirm="accountOther(row.id)"><t-link theme="success">到账确认</t-link></t-popconfirm>
+                <t-popconfirm content="确认删除？" @confirm="delOther(row.id)"><t-link theme="danger">删除</t-link></t-popconfirm>
+              </t-space>
+            </template>
+          </t-table>
+        </div>
+        <!-- 报表 -->
+        <div v-else-if="activePage==='bill.report'">
+          <t-space style="margin-bottom:12px">
+            <t-select v-model="reportYear" style="width:120px" @change="loadReport">
+              <t-option v-for="y in years" :key="y" :value="y" :label="y+' 年'"/>
+            </t-select>
+          </t-space>
+          <t-table row-key="ym" :data="reportRows" :columns="reportCols"/>
+        </div>
+        <!-- 租客信息 -->
+        <div v-else-if="activePage==='tenant.message'">
+          <t-space style="margin-bottom:12px">
+            <t-button theme="primary" @click="openTenant()">新增租客</t-button>
+          </t-space>
+          <t-table row-key="id" :data="tenants" :columns="tenantCols">
+            <template #ops="{row}">
+              <t-space size="8px">
+                <t-link theme="primary" @click="openTenant(row)">编辑</t-link>
+                <t-popconfirm content="确认删除该租客？" @confirm="delTenant(row.id)"><t-link theme="danger">删除</t-link></t-popconfirm>
+              </t-space>
+            </template>
+          </t-table>
+        </div>
+        <!-- 合同管理 -->
+        <div v-else-if="activePage==='tenant.contract'">
+          <t-space style="margin-bottom:12px">
+            <t-button theme="primary" @click="openContract()">新增合同</t-button>
+          </t-space>
+          <t-table row-key="id" :data="contracts" :columns="contractCols">
+            <template #days="{row}">
+              <t-tag v-if="row.days_left<0" theme="danger">已到期</t-tag>
+              <t-tag v-else-if="row.days_left<30" theme="warning">剩 {{row.days_left}} 天</t-tag>
+              <t-tag v-else theme="success">剩 {{row.days_left}} 天</t-tag>
+            </template>
+            <template #ops="{row}">
+              <t-space size="8px">
+                <t-link theme="primary" @click="openContract(row)">编辑</t-link>
+                <t-popconfirm content="确认删除该合同？" @confirm="delContract(row.id)"><t-link theme="danger">删除</t-link></t-popconfirm>
+              </t-space>
+            </template>
+          </t-table>
+        </div>
+        <!-- 维修申请 -->
+        <div v-else-if="activePage==='tenant.maintain'">
+          <t-space style="margin-bottom:12px">
+            <t-button theme="primary" @click="maintainVisible=true">登记维修</t-button>
+          </t-space>
+          <t-table row-key="id" :data="maintains" :columns="maintainCols">
+            <template #status="{row}">
+              <t-tag v-if="row.status==='Y'" theme="success">已解决</t-tag>
+              <t-tag v-else theme="danger">未解决</t-tag>
+            </template>
+            <template #ops="{row}">
+              <t-link @click="toggleMaintain(row.id)">{{ row.status==='Y' ? '标记未解决' : '标记已解决' }}</t-link>
+            </template>
+          </t-table>
+        </div>
+        <!-- 水电总表 -->
+        <div v-else-if="activePage==='we.meter'">
+          <t-space style="margin-bottom:12px">
+            <t-button theme="primary" @click="meterVisible=true">新增总表</t-button>
+          </t-space>
+          <t-table row-key="id" :data="meters" :columns="meterCols">
+            <template #ops="{row}">
+              <t-popconfirm content="确认删除该总表？" @confirm="delMeter(row.id)"><t-link theme="danger">删除</t-link></t-popconfirm>
+            </template>
+          </t-table>
+        </div>
+        <!-- 水费/电费账单 -->
+        <div v-else-if="activePage==='we.water'||activePage==='we.electricity'">
+          <t-space style="margin-bottom:12px">
+            <t-button theme="primary" @click="openWebill()">新增账单</t-button>
+            <t-button variant="outline" @click="detailVisible=true">房间抄表</t-button>
+          </t-space>
+          <t-table row-key="id" :data="webills" :columns="webillCols">
+            <template #status="{row}">
+              <t-tag v-if="row.accounting_date" theme="success">已到账</t-tag>
+              <t-tag v-else theme="warning">未到账</t-tag>
+            </template>
+            <template #ops="{row}">
+              <t-space size="8px">
+                <t-popconfirm v-if="!row.accounting_date" content="确认到账？到账后自动开启新周期" @confirm="accountWebill(row.id)"><t-link theme="success">到账确认</t-link></t-popconfirm>
+              </t-space>
+            </template>
+          </t-table>
+        </div>
+        <!-- 修改密码 -->
+        <div v-else-if="activePage==='admin.user'">
+          <t-card title="修改密码" style="max-width:420px">
+            <t-form @submit="doPassword">
+              <t-form-item label="原密码"><t-input v-model="pwForm.old_password" type="password"/></t-form-item>
+              <t-form-item label="新密码"><t-input v-model="pwForm.new_password" type="password" placeholder="≥8位"/></t-form-item>
+              <t-form-item><t-button theme="primary" type="submit">保存</t-button></t-form-item>
+            </t-form>
+          </t-card>
+        </div>
+        <!-- 占位页 -->
+        <t-card v-else :title="pageTitle" style="max-width:520px">
+          <t-empty description="该模块建设中，下一批交付"/>
+        </t-card>
+      </t-content>
+    </t-layout>
+  </t-layout>
+
+  <!-- 房产弹窗 -->
+  <t-dialog v-model:visible="propertyVisible" :header="propertyForm.id ? '编辑房产' : '新增房产'" :footer="false" width="480px">
+    <t-form @submit="saveProperty" label-width="80px">
+      <t-form-item label="房产名"><t-input v-model="propertyForm.name" placeholder="简称（列表显示）"/></t-form-item>
+      <t-form-item label="展示名"><t-input v-model="propertyForm.name_show" placeholder="完整展示名"/></t-form-item>
+      <t-form-item label="地址"><t-input v-model="propertyForm.address"/></t-form-item>
+      <t-form-item label="房东"><t-input v-model="propertyForm.landlord"/></t-form-item>
+      <t-form-item label="电话"><t-input v-model="propertyForm.phone"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">保存</t-button>
+    </t-form>
+  </t-dialog>
+
+  <!-- 房间弹窗 -->
+  <t-dialog v-model:visible="numberVisible" :header="numberForm.id ? '编辑房间' : '新增房间'" :footer="false" width="520px">
+    <t-form @submit="saveNumber" label-width="90px">
+      <t-form-item label="所属房产">
+        <t-select v-model="numberForm.house_property_id">
+          <t-option v-for="p in properties" :key="p.id" :value="p.id" :label="p.name_show || p.name"/>
+        </t-select>
+      </t-form-item>
+      <t-form-item label="房号"><t-input v-model="numberForm.name"/></t-form-item>
+      <t-form-item label="月租"><t-input-number v-model="numberForm.rental" :min="0" style="width:100%"/></t-form-item>
+      <t-form-item label="押金"><t-input-number v-model="numberForm.deposit" :min="0" style="width:100%"/></t-form-item>
+      <t-form-item label="逾期日租"><t-input-number v-model="numberForm.daily_rent" :min="0" style="width:100%"/></t-form-item>
+      <t-form-item label="周期">
+        <t-input-number v-model="numberForm.cycle" :min="1" style="width:90px"/>
+        <t-select v-model="numberForm.cycle_type" style="width:110px; margin-left:8px">
+          <t-option value="month" label="月"/><t-option value="year" label="年"/>
+        </t-select>
+      </t-form-item>
+      <t-form-item label="水电单价">
+        <t-input-number v-model="numberForm.water_price" :min="0" :step="0.1" style="width:130px" placeholder="水"/>
+        <t-input-number v-model="numberForm.electricity_price" :min="0" :step="0.1" style="width:130px; margin-left:8px" placeholder="电"/>
+      </t-form-item>
+      <t-form-item label="杂费">
+        <t-input-number v-model="numberForm.fees1" :min="0" style="width:110px" placeholder="卫生费"/>
+        <t-input-number v-model="numberForm.fees2" :min="0" :step="0.1" style="width:110px; margin-left:6px" placeholder="网费"/>
+      </t-form-item>
+      <t-form-item label="设备"><t-textarea v-model="numberForm.equipment" :autosize="{minRows:1}"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">保存</t-button>
+    </t-form>
+  </t-dialog>
+
+  <!-- 入住弹窗 -->
+  <t-dialog v-model:visible="checkinVisible" header="办理入住" :footer="false" width="480px">
+    <t-form @submit="saveCheckin" label-width="90px">
+      <t-alert theme="info" :message="'房号：'+(checkinRoom?.name||'')" style="margin-bottom:12px"/>
+      <t-form-item label="姓名"><t-input v-model="checkinForm.name"/></t-form-item>
+      <t-form-item label="性别">
+        <t-select v-model="checkinForm.sex"><t-option value="男" label="男"/><t-option value="女" label="女"/></t-select>
+      </t-form-item>
+      <t-form-item label="电话"><t-input v-model="checkinForm.phone"/></t-form-item>
+      <t-form-item label="身份证"><t-input v-model="checkinForm.id_card_number"/></t-form-item>
+      <t-form-item label="籍贯"><t-input v-model="checkinForm.native_place"/></t-form-item>
+      <t-form-item label="工作单位"><t-input v-model="checkinForm.work_units"/></t-form-item>
+      <t-form-item label="备注"><t-textarea v-model="checkinForm.note" :autosize="{minRows:1}"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">登记入住</t-button>
+    </t-form>
+  </t-dialog>
+
+  <!-- 出账弹窗 -->
+  <t-dialog v-model:visible="billVisible" header="生成账单" :footer="false" width="520px">
+    <t-form @submit="saveBill" label-width="110px">
+      <t-alert theme="info" :message="'房号：'+(billRoom?.name||'')+' · 月租 ¥'+(billRoom?.rental||0)" style="margin-bottom:12px"/>
+      <t-form-item label="本期"><t-space>
+        <t-date-picker v-model="billForm.start_time" style="width:140px" placeholder="开始"/>
+        <t-date-picker v-model="billForm.end_time" style="width:140px" placeholder="结束"/>
+      </t-space></t-form-item>
+      <t-form-item label="电表(上/本月)">
+        <t-input-number v-model="billForm.electricity_meter_last_month" :min="0" style="width:130px"/>
+        <t-input-number v-model="billForm.electricity_meter_this_month" :min="0" style="width:130px; margin-left:8px"/>
+      </t-form-item>
+      <t-form-item label="水表(上/本月)">
+        <t-input-number v-model="billForm.water_meter_last_month" :min="0" style="width:130px"/>
+        <t-input-number v-model="billForm.water_meter_this_month" :min="0" style="width:130px; margin-left:8px"/>
+      </t-form-item>
+      <t-form-item label="账单类型">
+        <t-select v-model="billForm.bill_type">
+          <t-option value="A" label="房租账单"/><t-option value="B" label="逾期账单"/><t-option value="C" label="退房账单"/>
+        </t-select>
+      </t-form-item>
+      <t-form-item label="备注"><t-input v-model="billForm.note"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">生成账单</t-button>
+    </t-form>
+  </t-dialog>
+
+  <!-- 支出弹窗 -->
+  <t-dialog v-model:visible="otherVisible" header="新增支出" :footer="false" width="440px">
+    <t-form @submit="saveOther" label-width="80px">
+      <t-form-item label="房产">
+        <t-select v-model="otherForm.house_property_id">
+          <t-option v-for="p in properties" :key="p.id" :value="p.id" :label="p.name_show || p.name"/>
+        </t-select>
+      </t-form-item>
+      <t-form-item label="类型"><t-input v-model="otherForm.type" placeholder="维修/工资…"/></t-form-item>
+      <t-form-item label="金额"><t-input-number v-model="otherForm.total_money" :min="0" style="width:100%"/></t-form-item>
+      <t-form-item label="备注"><t-input v-model="otherForm.note"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">保存</t-button>
+    </t-form>
+  </t-dialog>
+
+  <t-dialog v-model:visible="tenantVisible" header="租客信息" :footer="false" width="480px">
+    <t-form @submit="saveTenant" label-width="80px">
+      <t-form-item label="姓名"><t-input v-model="tenantForm.name"/></t-form-item>
+      <t-form-item label="性别"><t-select v-model="tenantForm.sex"><t-option value="男" label="男"/><t-option value="女" label="女"/></t-select></t-form-item>
+      <t-form-item label="电话"><t-input v-model="tenantForm.phone"/></t-form-item>
+      <t-form-item label="身份证"><t-input v-model="tenantForm.id_card_number"/></t-form-item>
+      <t-form-item label="籍贯"><t-input v-model="tenantForm.native_place"/></t-form-item>
+      <t-form-item label="工作单位"><t-input v-model="tenantForm.work_units"/></t-form-item>
+      <t-form-item label="备注"><t-input v-model="tenantForm.note"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">保存</t-button>
+    </t-form>
+  </t-dialog>
+
+  <t-dialog v-model:visible="contractVisible" header="合同" :footer="false" width="480px">
+    <t-form @submit="saveContract" label-width="80px">
+      <t-form-item label="租客"><t-select v-model="contractForm.tenant_message_id"><t-option v-for="t in tenants" :key="t.id" :value="t.id" :label="t.name"/></t-select></t-form-item>
+      <t-form-item label="合同类型"><t-select v-model="contractForm.type"><t-option value="Y" label="在租"/><t-option value="N" label="已结束"/></t-select></t-form-item>
+      <t-form-item label="开始日期"><t-date-picker v-model="contractForm.start_date" style="width:100%"/></t-form-item>
+      <t-form-item label="结束日期"><t-date-picker v-model="contractForm.end_date" style="width:100%"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">保存</t-button>
+    </t-form>
+  </t-dialog>
+
+  <t-dialog v-model:visible="maintainVisible" header="登记维修" :footer="false" width="440px">
+    <t-form @submit="saveMaintain" label-width="80px">
+      <t-form-item label="房产">
+        <t-select v-model="maintainForm.house_property_id">
+          <t-option v-for="p in properties" :key="p.id" :value="p.id" :label="p.name_show || p.name"/>
+        </t-select>
+      </t-form-item>
+      <t-form-item label="说明"><t-textarea v-model="maintainForm.description" placeholder="漏水/电器损坏…"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">保存</t-button>
+    </t-form>
+  </t-dialog>
+
+  <t-dialog v-model:visible="meterVisible" header="新增水电总表" :footer="false" width="440px">
+    <t-form @submit="saveMeter" label-width="80px">
+      <t-form-item label="房产">
+        <t-select v-model="meterForm.house_property_id">
+          <t-option v-for="p in properties" :key="p.id" :value="p.id" :label="p.name_show || p.name"/>
+        </t-select>
+      </t-form-item>
+      <t-form-item label="名称"><t-input v-model="meterForm.name" placeholder="如：1栋总水表"/></t-form-item>
+      <t-form-item label="类型"><t-select v-model="meterForm.type"><t-option value="W" label="水"/><t-option value="E" label="电"/></t-select></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">保存</t-button>
+    </t-form>
+  </t-dialog>
+
+  <t-dialog v-model:visible="webillVisible" header="新增水电账单" :footer="false" width="440px">
+    <t-form @submit="saveWebill" label-width="90px">
+      <t-form-item label="总表">
+        <t-select v-model="webillForm.meter_id">
+          <t-option v-for="m in meters.filter(x => x.type === webillType)" :key="m.id" :value="m.id" :label="m.property_name+' · '+m.name"/>
+        </t-select>
+      </t-form-item>
+      <t-form-item label="开始月份"><t-date-picker v-model="webillForm.start_month" mode="month" style="width:100%"/></t-form-item>
+      <t-form-item label="结束月份"><t-date-picker v-model="webillForm.end_month" mode="month" style="width:100%"/></t-form-item>
+      <t-form-item label="总表用量"><t-input-number v-model="webillForm.master_dosage" :min="0" style="width:100%"/></t-form-item>
+      <t-form-item label="总表金额"><t-input-number v-model="webillForm.master_sum" :min="0" style="width:100%"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">保存</t-button>
+    </t-form>
+  </t-dialog>
+
+  <t-dialog v-model:visible="detailVisible" header="房间抄表" :footer="false" width="440px">
+    <t-form @submit="saveDetail" label-width="90px">
+      <t-form-item label="总表">
+        <t-select v-model="detailForm.meter_id">
+          <t-option v-for="m in meters.filter(x => x.type === webillType)" :key="m.id" :value="m.id" :label="m.property_name+' · '+m.name"/>
+        </t-select>
+      </t-form-item>
+      <t-form-item label="房间号">
+        <t-select v-model="detailForm.house_number_id">
+          <t-option v-for="n in numbers" :key="n.id" :value="String(n.id)" :label="n.name"/>
+        </t-select>
+      </t-form-item>
+      <t-form-item label="用量"><t-input-number v-model="detailForm.dosage" :min="0" style="width:100%"/></t-form-item>
+      <t-form-item label="金额"><t-input-number v-model="detailForm.amount" :min="0" style="width:100%"/></t-form-item>
+      <t-form-item label="抄表日期"><t-date-picker v-model="detailForm.calculate_date" style="width:100%"/></t-form-item>
+      <t-button block theme="primary" type="submit" :loading="loading">保存</t-button>
+    </t-form>
+  </t-dialog>
+
+  <t-toast ref="toast"/>
+</div>
+
+<script>
+const { createApp, ref, reactive } = Vue;
+const api = axios.create({ baseURL: '/api', timeout: 15000 });
+api.interceptors.response.use(r => r.data, err => ({ code: -1, msg: '网络异常' }));
+
+createApp({
+  setup() {
+    const BRAND = 'Dusk';   // 专属品牌（浅色公寓 LOGO 自绘 SVG）
+    const toast = ref(null);
+    const msg = (m, t='success') => toast.value?.[t === 'success' ? 'success' : 'error']({ content: m, duration: 2200 });
+
+    const logged = ref(false), needSetup = ref(false), loading = ref(false);
+    const form = reactive({ username: '', password: '' });
+    const menus = ref([]), activePage = ref('house.property');
+
+    const properties = ref([]), numbers = ref([]), receipts = ref([]), receiptSum = ref(0), others = ref([]);
+    const numPid = ref(null);
+    const reportYear = ref(String(new Date().getFullYear())), reportRows = ref([]);
+    const years = Array.from({length: 5}, (_, i) => String(new Date().getFullYear() - i));
+
+    const propertyVisible = ref(false);
+    const propertyForm = reactive({ id: null, name: '', name_show: '', address: '', landlord: '', phone: '' });
+    const numberVisible = ref(false);
+    const numberForm = reactive({ id: null, house_property_id: null, name: '', rental: 0, deposit: 0, daily_rent: 0, cycle: 1, cycle_type: 'month', water_price: 0, electricity_price: 0, fees1: 0, fees2: 0, fees3: 0, fees4: 0, equipment: '' });
+    const checkinVisible = ref(false);
+    const checkinRoom = ref(null);
+    const checkinForm = reactive({ name: '', sex: '男', phone: '', id_card_number: '', native_place: '', work_units: '', note: '' });
+    const billVisible = ref(false);
+    const billRoom = ref(null);
+    const billForm = reactive({ bill_type: 'A', start_time: '', end_time: '', electricity_meter_last_month: 0, electricity_meter_this_month: 0, water_meter_last_month: 0, water_meter_this_month: 0, note: '' });
+    const otherVisible = ref(false);
+    const otherForm = reactive({ house_property_id: null, type: '', total_money: 0, note: '' });
+
+    const propCols = [
+      { colKey: 'name', title: '房产名', width: 110 },
+      { colKey: 'name_show', title: '展示名' },
+      { colKey: 'address', title: '地址', ellipsis: true },
+      { colKey: 'room_rented', title: '在租/总数', width: 100, cell: (h, {row}) => `${row.room_rented}/${row.room_total}` },
+      { colKey: 'bill_unpaid', title: '未收账单', width: 90 },
+      { colKey: 'ops', title: '操作', width: 120, cell: 'ops' },
+    ];
+    const numCols = [
+      { colKey: 'name', title: '房号', width: 90 },
+      { colKey: 'state', title: '状态', width: 70, cell: 'state' },
+      { colKey: 'tenant_name', title: '租客', width: 90, cell: (h, {row}) => row.tenant_name || '-' },
+      { colKey: 'rental', title: '月租', width: 80, cell: (h, {row}) => '¥' + row.rental },
+      { colKey: 'deposit', title: '押金', width: 80 },
+      { colKey: 'water_price', title: '水价', width: 70 },
+      { colKey: 'electricity_price', title: '电价', width: 70 },
+      { colKey: 'ops', title: '操作', width: 190, cell: 'ops' },
+    ];
+    const receiptCols = [
+      { colKey: 'property_name', title: '房产', width: 100 },
+      { colKey: 'number_name', title: '房号', width: 90 },
+      { colKey: 'tenant_name', title: '租客', width: 90, cell: (h, {row}) => row.tenant_name || '-' },
+      { colKey: 'bill_type', title: '类型', width: 80, cell: 'bill_type' },
+      { colKey: 'start_time', title: '账期', width: 180, cell: (h, {row}) => (row.start_time||'').slice(0,10) + ' ~ ' + (row.end_time||'').slice(0,10) },
+      { colKey: 'electricity', title: '电费', width: 70 },
+      { colKey: 'water', title: '水费', width: 70 },
+      { colKey: 'total_money', title: '合计', width: 100, cell: (h, {row}) => '¥' + row.total_money },
+      { colKey: 'ops', title: '操作', width: 160, cell: 'ops' },
+    ];
+    const otherCols = [
+      { colKey: 'type', title: '类型', width: 100 },
+      { colKey: 'total_money', title: '金额', width: 100, cell: (h, {row}) => '¥' + row.total_money },
+      { colKey: 'note', title: '备注', ellipsis: true },
+      { colKey: 'accout_mark', title: '到账', width: 70, cell: (h, {row}) => row.accout_mark==='Y' ? '✓' : '未' },
+      { colKey: 'accounting_date', title: '时间', width: 160 },
+      { colKey: 'ops', title: '操作', width: 140, cell: 'ops' },
+    ];
+    const reportCols = [
+      { colKey: 'ym', title: '月份', width: 120 },
+      { colKey: 'income', title: '收入', cell: (h, {row}) => '¥' + (row.income || 0) },
+      { colKey: 'expense', title: '支出', cell: (h, {row}) => '¥' + (row.expense || 0) },
+      { colKey: 'profit', title: '利润', cell: (h, {row}) => '¥' + ((row.income || 0) - (row.expense || 0)) },
+    ];
+
+    async function boot() {
+      const need = await api.get('/auth/need-setup').catch(() => null);
+      if (need?.data?.need_setup) { needSetup.value = true; return; }
+      const me = await api.get('/auth/me').catch(() => null);
+      if (me?.code === 0) { logged.value = true; await afterLogin(); }
+    }
+    async function doSetup() {
+      loading.value = true;
+      const r = await api.post('/auth/setup', form);
+      loading.value = false;
+      if (r.code === 0) { msg('初始化成功，请登录'); needSetup.value = false; }
+      else msg(r.msg, 'error');
+    }
+    async function doLogin() {
+      loading.value = true;
+      const r = await api.post('/auth/login', form);
+      loading.value = false;
+      if (r.code === 0) { logged.value = true; await afterLogin(); }
+      else msg(r.msg, 'error');
+    }
+    async function doLogout() { await api.post('/auth/logout'); logged.value = false; }
+    async function afterLogin() {
+      const [menu, prop] = await Promise.all([api.get('/menu'), api.get('/property')]);
+      if (menu.code === 0) menus.value = menu.data;
+      if (prop.code === 0) properties.value = prop.data;
+      await onMenu('house.property');
+    }
+    async function onMenu(v) {
+      activePage.value = v;
+      if (v === 'house.property') loadProperties();
+      else if (v === 'house.number') loadNumbers();
+      else if (v === 'house.uncollected' || v === 'house.collected') loadReceipts();
+      else if (v === 'house.other') loadOthers();
+      else if (v === 'bill.report') loadReport();
+      else if (v === 'tenant.message') loadTenants();
+      else if (v === 'tenant.contract') { await loadTenants(); loadContracts(); }
+      else if (v === 'tenant.maintain') loadMaintains();
+      else if (v === 'we.meter') loadMeters();
+      else if (v === 'we.water' || v === 'we.electricity') { webillType.value = v === 'we.water' ? 'W' : 'E'; await loadMeters(); loadWebills(); }
+      else if (v === 'admin.user') loadProperties();
+    }
+    const pageTitle = () => ({
+      'tenant.message': '租客信息', 'tenant.contract': '合同管理', 'tenant.maintain': '维修申请',
+      'we.meter': '水电总表', 'we.water': '水费账单', 'we.electricity': '电费账单', 'admin.user': '用户管理',
+    }[activePage.value] || '模块');
+
+    async function loadProperties() { const r = await api.get('/property'); if (r.code===0) properties.value = r.data; }
+    async function loadNumbers() { const r = await api.get('/number', { params: numPid.value ? { property_id: numPid.value } : {} }); if (r.code===0) numbers.value = r.data; }
+    async function loadReceipts() { const t = activePage.value === 'house.collected' ? 'collected' : 'uncollected'; const r = await api.get('/receipt', { params: { type: t } }); if (r.code===0) { receipts.value = r.data.list; receiptSum.value = r.data.sum; } }
+    async function loadOthers() { const r = await api.get('/other'); if (r.code===0) others.value = r.data; }
+    async function loadReport() {
+      const r = await api.get('/report', { params: { year: reportYear.value } });
+      if (r.code===0) {
+        const inc = Object.fromEntries(r.data.income.map(x => [x.ym, x.total]));
+        const exp = Object.fromEntries(r.data.expense.map(x => [x.ym, x.total]));
+        const yms = [...new Set([...r.data.income.map(x=>x.ym), ...r.data.expense.map(x=>x.ym)])].sort();
+        reportRows.value = yms.map(ym => ({ ym, income: inc[ym]||0, expense: exp[ym]||0 }));
+      }
+    }
+
+    function openProperty(row) { Object.assign(propertyForm, row ? {...row} : { id:null,name:'',name_show:'',address:'',landlord:'',phone:'' }); propertyVisible.value = true; }
+    async function saveProperty() {
+      loading.value = true;
+      const r = propertyForm.id ? await api.put('/property/'+propertyForm.id, propertyForm) : await api.post('/property', propertyForm);
+      loading.value = false;
+      if (r.code===0) { propertyVisible.value=false; msg('已保存'); loadProperties(); } else msg(r.msg,'error');
+    }
+    async function delProperty(id) { const r = await api.delete('/property/'+id); if (r.code===0) { msg('已删除'); loadProperties(); } else msg(r.msg,'error'); }
+
+    function openNumber(row) {
+      Object.assign(numberForm, row ? {...row} : { id:null, house_property_id: properties.value[0]?.id, name:'', rental:0, deposit:0, daily_rent:0, cycle:1, cycle_type:'month', water_price:0, electricity_price:0, fees1:0, fees2:0, fees3:0, fees4:0, equipment:'' });
+      numberVisible.value = true;
+    }
+    async function saveNumber() {
+      loading.value = true;
+      const r = numberForm.id ? await api.put('/number/'+numberForm.id, numberForm) : await api.post('/number', numberForm);
+      loading.value = false;
+      if (r.code===0) { numberVisible.value=false; msg('已保存'); loadNumbers(); } else msg(r.msg,'error');
+    }
+    async function delNumber(id) { const r = await api.delete('/number/'+id); if (r.code===0) { msg('已删除'); loadNumbers(); } else msg(r.msg,'error'); }
+
+    function openCheckin(row) { checkinRoom.value = row; Object.assign(checkinForm, { name:'', sex:'男', phone:'', id_card_number:'', native_place:'', work_units:'', note:'' }); checkinVisible.value = true; }
+    async function saveCheckin() {
+      loading.value = true;
+      const r = await api.post('/number/'+checkinRoom.value.id+'/checkin', checkinForm);
+      loading.value = false;
+      if (r.code===0) { checkinVisible.value=false; msg('入住已登记'); loadNumbers(); } else msg(r.msg,'error');
+    }
+    async function checkout(id) { const r = await api.post('/number/'+id+'/checkout'); if (r.code===0) { msg('已退房'); loadNumbers(); } else msg(r.msg,'error'); }
+
+    function openBill(row) { billRoom.value = row; Object.assign(billForm, { bill_type:'A', start_time:'', end_time:'', electricity_meter_last_month:0, electricity_meter_this_month:0, water_meter_last_month:0, water_meter_this_month:0, note:'' }); billVisible.value = true; }
+    async function saveBill() {
+      loading.value = true;
+      const r = await api.post('/receipt', { ...billForm, house_number_id: billRoom.value.id });
+      loading.value = false;
+      if (r.code===0) { billVisible.value=false; msg('账单已生成 ¥'+r.data.total); } else msg(r.msg,'error');
+    }
+    async function accounting(id) { const r = await api.post('/receipt/'+id+'/accounting'); if (r.code===0) { msg('已确认到账'); loadReceipts(); } else msg(r.msg,'error'); }
+    async function delReceipt(id) { const r = await api.delete('/receipt/'+id); if (r.code===0) { msg('已删除'); loadReceipts(); } else msg(r.msg,'error'); }
+
+    async function saveOther() {
+      loading.value = true;
+      const r = await api.post('/other', otherForm);
+      loading.value = false;
+      if (r.code===0) { otherVisible.value=false; msg('已保存'); loadOthers(); } else msg(r.msg,'error');
+    }
+    async function delOther(id) { const r = await api.delete('/other/'+id); if (r.code===0) { msg('已删除'); loadOthers(); } else msg(r.msg,'error'); }
+    async function accountOther(id) { const r = await api.post('/other/'+id+'/account'); if (r.code===0) { msg('已到账'); loadOthers(); } else msg(r.msg,'error'); }
+
+    // ---------- 第三批：租客/合同/维修/水电 ----------
+    const tenants = ref([]), contracts = ref([]), maintains = ref([]), meters = ref([]), webills = ref([]);
+    const webillType = ref('W');
+    const tenantVisible = ref(false), contractVisible = ref(false), maintainVisible = ref(false);
+    const meterVisible = ref(false), webillVisible = ref(false), detailVisible = ref(false);
+    const tenantForm = reactive({ id: null, name: '', sex: '男', phone: '', id_card_number: '', native_place: '', work_units: '', note: '' });
+    const contractForm = reactive({ id: null, tenant_message_id: null, type: 'Y', start_date: '', end_date: '' });
+    const maintainForm = reactive({ house_property_id: null, description: '' });
+    const meterForm = reactive({ house_property_id: null, name: '', type: 'W' });
+    const webillForm = reactive({ meter_id: null, start_month: '', end_month: '', master_dosage: 0, master_sum: 0 });
+    const detailForm = reactive({ meter_id: null, house_number_id: '', type: 'W', dosage: 0, amount: 0, calculate_date: '' });
+    const pwForm = reactive({ old_password: '', new_password: '' });
+
+    const tenantCols = [
+      { colKey: 'name', title: '姓名', width: 90 },
+      { colKey: 'sex', title: '性别', width: 60 },
+      { colKey: 'phone', title: '电话', width: 120 },
+      { colKey: 'property_name', title: '房产', cell: (h,{row}) => row.property_name || '-', ellipsis: true },
+      { colKey: 'room_name', title: '房间', cell: (h,{row}) => row.room_name || '-' },
+      { colKey: 'checkout_mark', title: '状态', width: 80, cell: (h,{row}) => h(Vue.resolveComponent('t-tag'), {theme: row.checkout_mark==='Y' ? 'default' : 'success'}, () => row.checkout_mark==='Y' ? '已退房' : '在住') },
+      { colKey: 'ops', title: '操作', width: 110, cell: 'ops' },
+    ];
+    const contractCols = [
+      { colKey: 'tenant_name', title: '租客', width: 90, cell: (h,{row}) => row.tenant_name || '-' },
+      { colKey: 'property_name', title: '房产', cell: (h,{row}) => row.property_name || '-' },
+      { colKey: 'room_name', title: '房间', width: 80, cell: (h,{row}) => row.room_name || '-' },
+      { colKey: 'start_date', title: '起', width: 100 },
+      { colKey: 'end_date', title: '止', width: 100 },
+      { colKey: 'days_left', title: '剩余', width: 100, cell: 'days' },
+      { colKey: 'ops', title: '操作', width: 110, cell: 'ops' },
+    ];
+    const maintainCols = [
+      { colKey: 'property_name', title: '房产', cell: (h,{row}) => row.property_name || '-' },
+      { colKey: 'room_name', title: '房间', width: 80, cell: (h,{row}) => row.room_name || '-' },
+      { colKey: 'description', title: '说明', ellipsis: true },
+      { colKey: 'create_time', title: '登记时间', width: 160 },
+      { colKey: 'status', title: '状态', width: 80, cell: 'status' },
+      { colKey: 'ops', title: '操作', width: 100, cell: 'ops' },
+    ];
+    const meterCols = [
+      { colKey: 'property_name', title: '房产', cell: (h,{row}) => row.property_name || '-' },
+      { colKey: 'name', title: '总表名' },
+      { colKey: 'type', title: '类型', width: 70, cell: (h,{row}) => row.type==='W' ? '水' : '电' },
+      { colKey: 'bill_count', title: '账单数', width: 80 },
+      { colKey: 'ops', title: '操作', width: 80, cell: 'ops' },
+    ];
+    const webillCols = [
+      { colKey: 'meter_name', title: '总表', width: 110 },
+      { colKey: 'start_month', title: '起', width: 100 },
+      { colKey: 'end_month', title: '止', width: 100 },
+      { colKey: 'master_dosage', title: '总用量', width: 80 },
+      { colKey: 'master_sum', title: '总金额', width: 90, cell: (h,{row}) => '¥'+row.master_sum },
+      { colKey: 'detail_dosage', title: '分摊用量', width: 90, cell: (h,{row}) => row.detail_dosage ?? '-' },
+      { colKey: 'difference_dosage', title: '差额', width: 80, cell: (h,{row}) => row.difference_dosage },
+      { colKey: 'status', title: '状态', width: 80, cell: 'status' },
+      { colKey: 'ops', title: '操作', width: 100, cell: 'ops' },
+    ];
+
+    async function loadTenants() { const r = await api.get('/tenant'); if (r.code===0) tenants.value = r.data; }
+    async function loadContracts() { const r = await api.get('/contract'); if (r.code===0) contracts.value = r.data; }
+    async function loadMaintains() { const r = await api.get('/maintain'); if (r.code===0) maintains.value = r.data; }
+    async function loadMeters() { const r = await api.get('/meter'); if (r.code===0) meters.value = r.data; }
+    async function loadWebills() { const r = await api.get('/webill', { params: { type: webillType.value } }); if (r.code===0) webills.value = r.data.list; }
+
+    function openTenant(row) {
+      Object.assign(tenantForm, row ? {...row} : { id:null, name:'', sex:'男', phone:'', id_card_number:'', native_place:'', work_units:'', note:'' });
+      tenantVisible.value = true;
+    }
+    async function saveTenant() {
+      loading.value = true;
+      const r = tenantForm.id ? await api.put('/tenant/'+tenantForm.id, tenantForm) : await api.post('/tenant', tenantForm);
+      loading.value = false;
+      if (r.code===0) { tenantVisible.value=false; msg('已保存'); loadTenants(); } else msg(r.msg,'error');
+    }
+    async function delTenant(id) { const r = await api.delete('/tenant/'+id); if (r.code===0) { msg('已删除'); loadTenants(); } else msg(r.msg,'error'); }
+
+    function openContract(row) {
+      Object.assign(contractForm, row ? {...row} : { id:null, tenant_message_id: tenants.value[0]?.id, type:'Y', start_date:'', end_date:'' });
+      contractVisible.value = true;
+    }
+    async function saveContract() {
+      loading.value = true;
+      const r = contractForm.id ? await api.put('/contract/'+contractForm.id, contractForm) : await api.post('/contract', contractForm);
+      loading.value = false;
+      if (r.code===0) { contractVisible.value=false; msg('已保存'); loadContracts(); } else msg(r.msg,'error');
+    }
+    async function delContract(id) { const r = await api.delete('/contract/'+id); if (r.code===0) { msg('已删除'); loadContracts(); } else msg(r.msg,'error'); }
+
+    async function saveMaintain() {
+      loading.value = true;
+      const r = await api.post('/maintain', { ...maintainForm, house_number_id: 0 });
+      loading.value = false;
+      if (r.code===0) { maintainVisible.value=false; msg('已登记'); loadMaintains(); } else msg(r.msg,'error');
+    }
+    async function toggleMaintain(id) { const r = await api.post('/maintain/'+id+'/toggle'); if (r.code===0) loadMaintains(); else msg(r.msg,'error'); }
+
+    async function saveMeter() {
+      loading.value = true;
+      const r = await api.post('/meter', meterForm);
+      loading.value = false;
+      if (r.code===0) { meterVisible.value=false; msg('已保存'); loadMeters(); } else msg(r.msg,'error');
+    }
+    async function delMeter(id) { const r = await api.delete('/meter/'+id); if (r.code===0) { msg('已删除'); loadMeters(); } else msg(r.msg,'error'); }
+
+    function openWebill() { Object.assign(webillForm, { meter_id: null, start_month:'', end_month:'', master_dosage:0, master_sum:0 }); webillVisible.value = true; }
+    async function saveWebill() {
+      loading.value = true;
+      const r = await api.post('/webill', webillForm);
+      loading.value = false;
+      if (r.code===0) { webillVisible.value=false; msg('已保存'); loadWebills(); } else msg(r.msg,'error');
+    }
+    async function accountWebill(id) { const r = await api.post('/webill/'+id+'/account'); if (r.code===0) { msg('已到账，新周期已开启'); loadWebills(); } else msg(r.msg,'error'); }
+    async function saveDetail() {
+      loading.value = true;
+      const r = await api.post('/webill/detail', { ...detailForm, type: webillType.value });
+      loading.value = false;
+      if (r.code===0) { detailVisible.value=false; msg('抄表已记录'); loadWebills(); } else msg(r.msg,'error');
+    }
+
+    async function doPassword() {
+      loading.value = true;
+      const r = await api.post('/auth/password', pwForm);
+      loading.value = false;
+      if (r.code===0) { msg('密码已修改'); Object.assign(pwForm, { old_password:'', new_password:'' }); }
+      else msg(r.msg,'error');
+    }
+
+    boot();
+    return {
+      BRAND, toast, msg, logged, needSetup, loading, form, menus, activePage, pageTitle,
+      properties, numbers, receipts, receiptSum, others, numPid, reportYear, reportRows, years,
+      propertyVisible, propertyForm, numberVisible, numberForm, checkinVisible, checkinRoom, checkinForm,
+      billVisible, billRoom, billForm, otherVisible, otherForm,
+      propCols, numCols, receiptCols, otherCols, reportCols,
+      boot, doSetup, doLogin, doLogout, onMenu,
+      openProperty, saveProperty, delProperty, openNumber, saveNumber, delNumber,
+      openCheckin, saveCheckin, checkout, openBill, saveBill, accounting, delReceipt,
+      saveOther, delOther, accountOther, loadNumbers, loadReport,
+      tenants, contracts, maintains, meters, webills, webillType,
+      tenantVisible, contractVisible, maintainVisible, meterVisible, webillVisible, detailVisible,
+      tenantForm, contractForm, maintainForm, meterForm, webillForm, detailForm, pwForm,
+      tenantCols, contractCols, maintainCols, meterCols, webillCols,
+      openTenant, saveTenant, delTenant, openContract, saveContract, delContract,
+      saveMaintain, toggleMaintain, saveMeter, delMeter, openWebill, saveWebill, accountWebill, saveDetail,
+      doPassword,
+    };
+  },
+}).use(TDesign).mount('#app');
+</script>
+</body>
+</html>

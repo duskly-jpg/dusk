@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm install hono@^4
+      - name: Bundle check（esbuild 编译 + 产物断言）
+        run: |
+          npx esbuild src/index.ts --bundle --format=esm --outfile=/tmp/bundle.js
+          test -s /tmp/bundle.js
+      - name: Schema sanity（种子表与代码引用对齐）
+        run: |
+          node -e "
+          const fs = require('fs');
+          const schema = fs.readFileSync('schema.sql','utf8');
+          const src = fs.readFileSync('src/index.ts','utf8');
+          const tables = [...src.matchAll(/(?:FROM|INTO|UPDATE)\s+(\w+)/g)].map(m=>m[1])
+            .filter(t => !['now','localtime'].includes(t));
+          const missing = [...new Set(tables)].filter(t => !schema.includes('CREATE TABLE IF NOT EXISTS '+t));
+          if (missing.length) { console.error('schema 缺表:', missing); process.exit(1); }
+          console.log('tables ok:', [...new Set(tables)].join(','));
+          "
+      - name: Frontend sanity（标签配对）
+        run: |
+          node -e "
+          const h = require('fs').readFileSync('public/index.html','utf8');
+          const pairs = [['<div','</div>'],['<template','</template>'],['<t-dialog','</t-dialog>']];
+          for (const [a,b] of pairs) if (h.split(a).length !== h.split(b).length) { console.error('unbalanced:',a); process.exit(1); }
+          console.log('html ok');
+          "

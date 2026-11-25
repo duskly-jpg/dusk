@@ -1,0 +1,8 @@
+Dusk — 出租屋管理系统（Cloudflare Workers + D1）
+Copyright 2026 duskly-jpg
+
+本产品业务模型（数据表结构、账单与水电分摊流程）参考自：
+  rent82 — https://gitee.com/MarcoMaHH/rent82 （Apache License 2.0，作者 MarcoMaHH）
+实现代码（Hono 后端 / Vue 3 前端 / 鉴权体系 / 构建配置）均为独立编写。
+
+根据 Apache License 2.0 第 4 条要求，本发行版附带原作版权声明副本（LICENSE.txt）。
