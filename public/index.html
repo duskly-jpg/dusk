@@ -12,17 +12,24 @@
 <script src="/static/common/tdesign/1.15.2/tdesign.min.js"></script>
 <script src="/static/admin/js/axios.min.js"></script>
 <style>
-  body { margin:0; font-family: system-ui, sans-serif; }
-  .login-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; background:linear-gradient(135deg,#eef3ff,#f7f9fc); }
-  .login-card { width:360px; padding:40px 36px; background:#fff; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.08); }
+  body { margin:0; font-family: system-ui, sans-serif; background:#f7f9fc; }
+  /* 焦点态收敛：干掉默认蓝色方框，输入类保留淡色提示 */
+  *:focus, *:focus-visible { outline: none !important; box-shadow: none !important; }
+  .t-input__wrap:focus-within, .t-textarea__wrap:focus-within { box-shadow: 0 0 0 2px rgba(84,124,255,.15) !important; }
+  .t-input, .t-textarea { --td-brand-color-focus: rgba(84,124,255,.15); }
+  .login-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; background:linear-gradient(135deg,#eef3ff 0%,#f7f9fc 55%,#fdf3f6 100%); }
+  .login-card { width:360px; padding:44px 38px; background:#fff; border-radius:16px; box-shadow:0 12px 40px rgba(31,63,111,.12); }
   .logo-row { display:inline-flex; align-items:center; gap:10px; }
-  .logo { text-align:center; font-size:22px; font-weight:700; color:#0052d9; margin-bottom:6px; }
-  .logo-sub { text-align:center; font-size:13px; color:#888; margin-bottom:24px; }
-  .side-logo { font-weight:700; font-size:17px; color:#0052d9; padding:0 8px; white-space:nowrap; display:inline-flex; align-items:center; gap:8px; }
-  .kpi-row { display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
-  .kpi { flex:1; min-width:140px; background:#fff; border-radius:10px; padding:14px 18px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
-  .kpi .v { font-size:22px; font-weight:700; color:#0052d9; }
-  .kpi .k { font-size:12px; color:#888; margin-top:2px; }
+  .logo { text-align:center; font-size:22px; font-weight:700; color:#1f3f6f; margin-bottom:6px; }
+  .logo-sub { text-align:center; font-size:13px; color:#8a94a6; margin-bottom:26px; letter-spacing:2px; }
+  .side-logo { font-weight:700; font-size:17px; color:#1f3f6f; padding:0 8px; white-space:nowrap; display:inline-flex; align-items:center; gap:8px; }
+  .page-title { font-size:16px; font-weight:600; color:#1f3f6f; margin:0 0 14px; }
+  .kpi-row { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .kpi { flex:1; min-width:150px; background:#fff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 10px rgba(31,63,111,.06); transition:transform .15s, box-shadow .15s; }
+  .kpi:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(31,63,111,.12); }
+  .kpi .v { font-size:24px; font-weight:700; color:#1f3f6f; font-variant-numeric:tabular-nums; }
+  .kpi .k { font-size:12px; color:#8a94a6; margin-top:4px; }
+  .kpi.warn .v { color:#e37318; }
 </style>
 </head>
 <body>
@@ -102,7 +109,7 @@
             <div class="kpi"><div class="v">¥{{ kpi.expense }}</div><div class="k">本年累计支出</div></div>
             <div class="kpi"><div class="v">¥{{ kpi.profit }}</div><div class="k">本年净利</div></div>
             <div class="kpi"><div class="v">{{ kpi.occupied }}/{{ kpi.unitTotal }}</div><div class="k">在租 / 总房间</div></div>
-            <div class="kpi"><div class="v" style="color:{{ kpi.overdue? '#e37318':'#0052d9' }}">{{ kpi.overdue }}</div><div class="k">逾期未缴账单</div></div>
+            <div class="kpi" :class="{ warn: kpi.overdue > 0 }"><div class="v">{{ kpi.overdue }}</div><div class="k">逾期未缴账单</div></div>
           </div>
           <t-table row-key="ym" :data="recent" :columns="recentCols" title="最近收支流水"/>
         </div>
@@ -271,7 +278,7 @@
             <t-form @submit="doPassword">
               <t-form-item label="原密码"><t-input v-model="pwForm.old_password" type="password"/></t-form-item>
               <t-form-item label="新密码"><t-input v-model="pwForm.new_password" type="password" placeholder="≥8位"/></t-form-item>
-              <t-form-item><t-button theme="primary" type="submit">保存</t-button></t-form-item>
+              <t-form-item><t-button theme="primary" type="submit" native-type="submit" @click="doPassword">保存</t-button></t-form-item>
             </t-form>
           </t-card>
         </div>
