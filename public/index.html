@@ -30,6 +30,19 @@
   .kpi .v { font-size:24px; font-weight:700; color:#1f3f6f; font-variant-numeric:tabular-nums; }
   .kpi .k { font-size:12px; color:#8a94a6; margin-top:4px; }
   .kpi.warn .v { color:#e37318; }
+  /* 移动端适配 */
+  .mobile-only { display:none; }
+  @media (max-width: 768px) {
+    .t-layout__sider, .t-default-menu.side-logo, aside { display:none !important; }
+    .mobile-only { display:block; }
+    .main-content { padding:12px !important; }
+    .kpi-row { gap:8px; }
+    .kpi { min-width: calc(50% - 4px); padding:12px 14px; }
+    .kpi .v { font-size:19px; }
+    .login-card { width:92vw; max-width:360px; padding:32px 22px; }
+    .t-dialog__card { max-width:92vw !important; }
+    .t-table { font-size:12px; }
+  }
 </style>
 </head>
 <body>
@@ -99,8 +112,26 @@
         <template #operations><t-button variant="outline" block @click="doLogout">退出登录</t-button></template>
       </t-menu>
     </t-aside>
+    <!-- 移动端顶栏（≥768px 隐藏） -->
+    <div class="mobile-only" style="position:sticky;top:0;z-index:10">
+      <t-head-menu :value="activePage" @change="onMenu">
+        <template #logo><span class="side-logo" style="padding:0 4px"><svg width="22" height="22"><use href="#apartment-mark"/></svg>{{ BRAND }}</span></template>
+        <t-menu-item value="home">概览</t-menu-item>
+        <t-menu-item value="buildings">楼栋</t-menu-item>
+        <t-menu-item value="units">房间</t-menu-item>
+        <t-menu-item value="tenants">租客</t-menu-item>
+        <t-menu-item value="leases">租约</t-menu-item>
+        <t-menu-item value="invoices">账单</t-menu-item>
+        <t-menu-item value="expenses">支出</t-menu-item>
+        <t-menu-item value="meters">总表</t-menu-item>
+        <t-menu-item value="periods">周期</t-menu-item>
+        <t-menu-item value="report">报表</t-menu-item>
+        <t-menu-item value="admin">设置</t-menu-item>
+        <template #operations><t-button variant="outline" size="small" @click="doLogout">退出</t-button></template>
+      </t-head-menu>
+    </div>
     <t-layout>
-      <t-content style="padding:18px;background:#f4f6fa;min-height:100vh">
+      <t-content class="main-content" style="padding:18px;background:#f4f6fa;min-height:100vh">
 
         <!-- 概览 -->
         <div v-if="activePage==='home'">
