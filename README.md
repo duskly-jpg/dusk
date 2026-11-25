@@ -3,16 +3,16 @@
 跑在 Cloudflare 免费档上的出租屋（二房东）管理后台：房产、房间、租客、合同、账单、水电分摊、收支柱报表，一套全收。零服务器、零月费，Workers + D1 免费额度即可长期运行。
 
 [![ci](https://github.com/duskly-jpg/dusk/actions/workflows/ci.yml/badge.svg)](https://github.com/duskly-jpg/dusk/actions/workflows/ci.yml)
-[![license](https://img.shields.io/github/license/duskly-jpg/dusk)](LICENSE.txt)
+[![license](https://img.shields.io/github/license/duskly-jpg/dusk)](LICENSE)
 
 ## 功能
 
-- **房产 / 房间**：房产增删改查；房间租金、押金、水电单价、缴费周期配置；入住 / 退房（退房自动解绑并标记）
-- **账单**：一键出账（房租 + 水电按表计费 + 固定费用自动合计），到账确认按房产 / 月聚合进报表
-- **租客 / 合同**：租客档案（退房未解绑保护），合同起止日期 + 剩余天数红黄绿预警
-- **水电分摊**：总表建账 → 房间抄表 → 总 / 分摊用量差额一目了然；到账自动开启下一计费周期
-- **其他支出**：循环支出（如房租月付）到账后自动生成下期记录
-- **报表**：年度收支柱状数据（I 收入 / E 支出口径）
+- **仪表盘**：楼 / 房 / 客 KPI、本月收支、应收账款一眼清
+- **房产 / 房间**：楼栋管理、房间档案（面积/楼层/设施/水电单价），状态由租约生命周期推导
+- **租约**：入住即建约，到期剩余天数红黄绿预警，退房一键解绑复位
+- **账单**：发票式计费（房租 / 水电 / 罚金 / 退押），应缴日 + 逾期天数实时计算，宽限期 + 日罚金引擎一键计罚
+- **水电分摊**：计费周期显式创建 → 房间抄表 → 总 / 分摊用量差额一目了然，结算自动生成各房费用账单与支出流水
+- **收支流水**：单笔入账可溯源（账单 / 支出 / 水电），循环支出自动生成下期
 - **鉴权**：PBKDF2-SHA256 口令哈希 + HMAC 会话令牌，HttpOnly Cookie，首次访问引导初始化管理员
 
 ## 技术栈
@@ -59,4 +59,4 @@ npx wrangler deploy
 
 ## License
 
-Apache-2.0（见 [LICENSE.txt](LICENSE.txt)）。业务模型参考自 [rent82](https://gitee.com/MarcoMaHH/rent82)（Apache-2.0），致谢见 [NOTICE](NOTICE)。
+MIT（见 [LICENSE](LICENSE)）。

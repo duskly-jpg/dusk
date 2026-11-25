@@ -1,164 +1,160 @@
--- rent8 · D1 schema —— 自 rent82 (gitee.com/MarcoMaHH/rent82, Apache-2.0) MySQL 方言忠实移植
--- 映射：AUTO_INCREMENT→AUTOINCREMENT / float,double→REAL / varchar,char→TEXT / timestamp→TEXT(ISO)
--- 原表前缀 rent_ 略去（D1 单库无冲突）
+-- Dusk v2 · schema（Cloudflare D1 / SQLite）
+-- 设计要点：
+--   1. 租约状态机：入住/退房=租约生命周期，房间状态由活跃租约推导
+--   2. 流水记账：ledger 单笔收支（v1 为按月聚合），报表直查流水
+--   3. 收租周期按天数（cycle_days），逾期罚金由 grace_days + penalty_daily 即时计算
+--   4. 账单发票化：kind 拆分（rent/utility/penalty/deposit），due_on 应缴日
+--   5. 水电计费周期显式创建，settle 结算出费用账单
 
-CREATE TABLE IF NOT EXISTS admin_user (
+CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  admin_role_id INTEGER NOT NULL DEFAULT 0,       -- 角色id
-  username TEXT NOT NULL UNIQUE,                  -- 用户名
-  password TEXT NOT NULL DEFAULT '',              -- PBKDF2-SHA256(100k) hex
-  salt TEXT NOT NULL DEFAULT '',                  -- hex 32B
-  openid TEXT DEFAULT '',                         -- 微信小程序openID
-  expiration_date TEXT, login_date TEXT,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-  update_time TEXT
+  username TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL DEFAULT '',           -- PBKDF2-SHA256(100k) hex
+  salt TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
-CREATE TABLE IF NOT EXISTS admin_role (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'Y',
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT ''
 );
-CREATE TABLE IF NOT EXISTS admin_menu (
+
+CREATE TABLE IF NOT EXISTS buildings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  pid INTEGER NOT NULL DEFAULT 0, name TEXT NOT NULL DEFAULT '',
-  icon TEXT DEFAULT '', controller TEXT DEFAULT '', sort INTEGER NOT NULL DEFAULT 0,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  title TEXT NOT NULL DEFAULT '',
+  address TEXT DEFAULT '',
+  district TEXT DEFAULT '',                    -- 区位标签（报表维度）
+  note TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
-CREATE TABLE IF NOT EXISTS admin_permission (
+
+CREATE TABLE IF NOT EXISTS units (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  admin_role_id INTEGER NOT NULL DEFAULT 0,
-  controller TEXT NOT NULL DEFAULT '', action TEXT NOT NULL DEFAULT '*',
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  building_id INTEGER NOT NULL DEFAULT 0,
+  code TEXT NOT NULL DEFAULT '',               -- 房号
+  floor INTEGER NOT NULL DEFAULT 0,
+  area REAL NOT NULL DEFAULT 0,                -- 面积㎡
+  status TEXT NOT NULL DEFAULT 'vacant',       -- vacant|occupied|reserved
+  rent INTEGER NOT NULL DEFAULT 0,
+  deposit INTEGER NOT NULL DEFAULT 0,
+  cycle_days INTEGER NOT NULL DEFAULT 30,      -- 收租周期（天）
+  grace_days INTEGER NOT NULL DEFAULT 3,       -- 逾期宽限（天）
+  penalty_daily INTEGER NOT NULL DEFAULT 0,    -- 逾期日罚金
+  power_rate REAL NOT NULL DEFAULT 0,
+  water_rate REAL NOT NULL DEFAULT 0,
+  furnishing TEXT DEFAULT '',                  -- 设施清单
+  tenant_id INTEGER,                           -- 在住租客（活跃租约推导维护）
+  lease_id INTEGER,                            -- 当前租约
+  note TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT
 );
-CREATE TABLE IF NOT EXISTS admin_parameter (
+
+CREATE TABLE IF NOT EXISTS tenants (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL, label TEXT NOT NULL, value TEXT NOT NULL, note TEXT,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
-);
-CREATE TABLE IF NOT EXISTS admin_subscribe (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  open_id TEXT NOT NULL, thing1 TEXT NOT NULL,     -- 房产名称
-  time2 TEXT NOT NULL, amount4 INTEGER NOT NULL,   -- 收租日期/应收租金
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
-);
-CREATE TABLE IF NOT EXISTS bill_sum (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  admin_user_id INTEGER NOT NULL DEFAULT 0, house_property_id INTEGER NOT NULL DEFAULT 0,
-  type TEXT NOT NULL,                              -- A房租账单/B逾期/C退房
-  amount REAL NOT NULL DEFAULT 0,
-  accounting_date TEXT NOT NULL, annual TEXT NOT NULL,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
-);
-CREATE TABLE IF NOT EXISTS house_fee (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  admin_user_id INTEGER NOT NULL DEFAULT 0,
-  column_id TEXT NOT NULL, column_name TEXT,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
-);
-CREATE TABLE IF NOT EXISTS house_property (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  admin_user_id INTEGER NOT NULL DEFAULT 0,
-  name TEXT NOT NULL DEFAULT '', name_show TEXT NOT NULL DEFAULT '',
-  address TEXT, landlord TEXT, phone TEXT, id_card TEXT,
-  is_default TEXT NOT NULL DEFAULT 'N',
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
-);
-CREATE TABLE IF NOT EXISTS house_number (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  house_property_id INTEGER NOT NULL DEFAULT 0,
-  tenant_message_id INTEGER,                       -- 租客id
-  house_receipt_id INTEGER,                        -- 当前收据单号
   name TEXT NOT NULL DEFAULT '',
-  rental INTEGER NOT NULL DEFAULT 0, deposit INTEGER NOT NULL DEFAULT 0,
-  daily_rent INTEGER NOT NULL DEFAULT 0,           -- 逾期日租金
-  checkin_date TEXT, payment_date TEXT,
-  cycle INTEGER NOT NULL DEFAULT 1, cycle_type TEXT NOT NULL DEFAULT 'month',
-  calculate_date TEXT NOT NULL, lease INTEGER NOT NULL DEFAULT 0,  -- 计算日期/期数
-  water_price REAL NOT NULL DEFAULT 0, electricity_price REAL NOT NULL DEFAULT 0,
-  fees1 INTEGER NOT NULL DEFAULT 0, fees2 INTEGER NOT NULL DEFAULT 0,
-  fees3 INTEGER NOT NULL DEFAULT 0, fees4 REAL NOT NULL DEFAULT 0,
-  equipment TEXT, delete_time TEXT,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  gender TEXT DEFAULT '',
+  phone TEXT DEFAULT '',
+  id_number TEXT DEFAULT '',
+  hometown TEXT DEFAULT '',
+  employer TEXT DEFAULT '',
+  emergency_contact TEXT DEFAULT '',           -- 紧急联系人
+  note TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
-CREATE TABLE IF NOT EXISTS house_receipt (
+
+-- 租约：入住=签租约，退房=终止租约
+CREATE TABLE IF NOT EXISTS leases (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  bill_type TEXT NOT NULL DEFAULT '',              -- A房租/B逾期/C退房
-  house_property_id INTEGER NOT NULL DEFAULT 0, house_number_id INTEGER NOT NULL DEFAULT 0,
-  tenant_message_id INTEGER NOT NULL DEFAULT 0,
-  start_time TEXT, end_time TEXT, meter_reading_time TEXT,
-  electricity_meter_this_month INTEGER, electricity_meter_last_month INTEGER,
-  electricity_consumption INTEGER, electricity REAL NOT NULL DEFAULT 0,
-  water_meter_this_month INTEGER, water_meter_last_month INTEGER,
-  water_consumption INTEGER, water REAL NOT NULL DEFAULT 0,
-  rental INTEGER NOT NULL DEFAULT 0, deposit INTEGER NOT NULL DEFAULT 0,
-  fees1 INTEGER NOT NULL DEFAULT 0, fees2 REAL NOT NULL DEFAULT 0,
-  fees3 REAL NOT NULL DEFAULT 0, fees4 REAL NOT NULL DEFAULT 0,
-  total_money REAL NOT NULL DEFAULT 0,
-  note TEXT DEFAULT '', accounting_date TEXT,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  unit_id INTEGER NOT NULL DEFAULT 0,
+  tenant_id INTEGER NOT NULL DEFAULT 0,
+  start_on TEXT NOT NULL,
+  end_on TEXT NOT NULL,
+  rent INTEGER NOT NULL DEFAULT 0,             -- 签约月租
+  deposit INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active',       -- active|ended
+  ended_on TEXT,
+  note TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
-CREATE TABLE IF NOT EXISTS house_other (
+
+-- 账单（发票式）
+CREATE TABLE IF NOT EXISTS invoices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  house_property_id INTEGER NOT NULL DEFAULT 0,
-  type TEXT NOT NULL DEFAULT '', total_money REAL NOT NULL DEFAULT 0,
-  note TEXT DEFAULT '', accout_mark TEXT NOT NULL DEFAULT 'N',
-  circulate_mark TEXT NOT NULL DEFAULT 'N', accounting_date TEXT,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  unit_id INTEGER NOT NULL DEFAULT 0,
+  tenant_id INTEGER DEFAULT 0,
+  lease_id INTEGER DEFAULT 0,
+  kind TEXT NOT NULL DEFAULT 'rent',           -- rent|utility|penalty|deposit
+  period_start TEXT,
+  period_end TEXT,
+  rent_part REAL NOT NULL DEFAULT 0,
+  power_usage REAL NOT NULL DEFAULT 0, power_part REAL NOT NULL DEFAULT 0,
+  water_usage REAL NOT NULL DEFAULT 0, water_part REAL NOT NULL DEFAULT 0,
+  extra_part REAL NOT NULL DEFAULT 0,          -- 罚金/杂费
+  amount REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',      -- pending|paid|void
+  issued_on TEXT NOT NULL DEFAULT (date('now')),
+  due_on TEXT,                                 -- 应缴日
+  paid_on TEXT,
+  note TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
-CREATE TABLE IF NOT EXISTS tenant_message (
+
+CREATE TABLE IF NOT EXISTS expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  house_property_id INTEGER NOT NULL DEFAULT 0, house_number_id INTEGER NOT NULL DEFAULT 0,
-  pid INTEGER NOT NULL DEFAULT 0,
-  name TEXT NOT NULL DEFAULT '', sex TEXT NOT NULL DEFAULT '',
-  checkout_mark TEXT NOT NULL DEFAULT 'N',
-  phone TEXT DEFAULT '', id_card_number TEXT DEFAULT '', native_place TEXT DEFAULT '',
-  work_units TEXT DEFAULT '', note TEXT DEFAULT '',
-  checkin_date TEXT, leave_date TEXT,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  building_id INTEGER NOT NULL DEFAULT 0,
+  category TEXT NOT NULL DEFAULT 'other',      -- repair|labor|supply|agency|other
+  amount REAL NOT NULL DEFAULT 0,
+  recur TEXT NOT NULL DEFAULT 'none',          -- none|monthly
+  occurred_on TEXT NOT NULL DEFAULT (date('now')),
+  note TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
-CREATE TABLE IF NOT EXISTS tenant_contract (
+
+CREATE TABLE IF NOT EXISTS meters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  house_property_id INTEGER NOT NULL DEFAULT 0, house_number_id INTEGER NOT NULL DEFAULT 0,
-  tenant_message_id INTEGER NOT NULL DEFAULT 0,
-  type TEXT NOT NULL DEFAULT 'Y', start_date TEXT, end_date TEXT,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  building_id INTEGER NOT NULL DEFAULT 0,
+  utility TEXT NOT NULL DEFAULT 'power',       -- power|water
+  label TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
-CREATE TABLE IF NOT EXISTS tenant_maintain (
+
+CREATE TABLE IF NOT EXISTS meter_periods (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  house_property_id INTEGER NOT NULL DEFAULT 0, house_number_id INTEGER NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'N',                -- Y已解决/N未解决
-  description TEXT DEFAULT '',
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  meter_id INTEGER NOT NULL DEFAULT 0,
+  start_on TEXT NOT NULL,
+  end_on TEXT NOT NULL,
+  master_usage REAL NOT NULL DEFAULT 0,
+  master_cost REAL NOT NULL DEFAULT 0,
+  settled INTEGER NOT NULL DEFAULT 0,
+  settled_on TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
-CREATE TABLE IF NOT EXISTS photo_tenant (
+
+CREATE TABLE IF NOT EXISTS meter_readings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  house_property_id INTEGER NOT NULL DEFAULT 0, tenant_message_id INTEGER NOT NULL DEFAULT 0,
-  url TEXT NOT NULL DEFAULT '',
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  period_id INTEGER NOT NULL DEFAULT 0,
+  unit_id INTEGER NOT NULL DEFAULT 0,
+  utility TEXT NOT NULL DEFAULT '',
+  usage REAL NOT NULL DEFAULT 0,
+  cost REAL NOT NULL DEFAULT 0,
+  read_on TEXT NOT NULL DEFAULT (date('now'))
 );
-CREATE TABLE IF NOT EXISTS photo_contract (
+
+-- 收支流水：单笔入账，报表直查
+CREATE TABLE IF NOT EXISTS ledger (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  house_property_id INTEGER NOT NULL DEFAULT 0, tenant_message_id INTEGER NOT NULL DEFAULT 0,
-  url TEXT NOT NULL DEFAULT '',
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
+  building_id INTEGER NOT NULL DEFAULT 0,
+  direction TEXT NOT NULL,                     -- income|expense
+  source TEXT NOT NULL DEFAULT '',             -- invoice|expense|meter
+  source_id INTEGER DEFAULT 0,
+  category TEXT DEFAULT '',                    -- rent|utility|penalty|deposit|repair...
+  amount REAL NOT NULL DEFAULT 0,
+  booked_on TEXT NOT NULL DEFAULT (date('now')),
+  note TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
-CREATE TABLE IF NOT EXISTS we_meter (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL DEFAULT '', type TEXT NOT NULL DEFAULT '',
-  house_property_id INTEGER NOT NULL DEFAULT 0, house_number_id TEXT NOT NULL DEFAULT '',
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
-);
-CREATE TABLE IF NOT EXISTS we_bill (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  meter_id INTEGER NOT NULL DEFAULT 0, house_property_id INTEGER NOT NULL DEFAULT 0,
-  accounting_date TEXT, start_month TEXT, end_month TEXT,
-  master_dosage INTEGER NOT NULL DEFAULT 0, master_sum REAL NOT NULL DEFAULT 0,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
-);
-CREATE TABLE IF NOT EXISTS we_detail (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  meter_id INTEGER NOT NULL DEFAULT 0, house_property_id INTEGER NOT NULL DEFAULT 0,
-  type TEXT NOT NULL,                              -- B电费/C水费
-  amount REAL NOT NULL DEFAULT 0, dosage REAL NOT NULL DEFAULT 0, calculate_date TEXT,
-  create_time TEXT NOT NULL DEFAULT (datetime('now','localtime')), update_time TEXT
-);
+
+CREATE INDEX IF NOT EXISTS idx_units_building ON units(building_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status, unit_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_date ON ledger(booked_on);
