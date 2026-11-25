@@ -440,7 +440,6 @@
     </t-form>
   </t-dialog>
 
-  <t-toast ref="toast"/>
 </div>
 
 <script>
@@ -451,8 +450,10 @@ api.interceptors.response.use(r => r.data, err => ({ code: -1, msg: '网络异�
 createApp({
   setup() {
     const BRAND = 'Dusk';
-    const toast = ref(null);
-    const msg = (m, t='success') => toast.value?.[t === 'success' ? 'success' : 'error']({ content: m, duration: 2200 });
+    const msg = (m, t='success') => {
+      const P = window.TDesign?.MessagePlugin;
+      if (P?.[t]) P[t](m, { duration: 2400 }); else console.log('['+t+']', m);
+    };
 
     const logged = ref(false), needSetup = ref(false), loading = ref(false);
     const form = reactive({ username: '', password: '' });
@@ -734,7 +735,7 @@ createApp({
 
     boot();
     return {
-      BRAND, toast, msg, logged, needSetup, loading, form, activePage,
+      BRAND, msg, logged, needSetup, loading, form, activePage,
       buildings, units, tenants, leases, invoices, invTab, expenses, meters, periods, weType, report, reportYear, recent, kpi, unitBid, years,
       buildingVisible, buildingForm, unitVisible, unitForm, leaseVisible, leaseRoom, leaseForm,
       tenantVisible, tenantForm, invoiceVisible, invoiceForm, expenseVisible, expenseForm,
