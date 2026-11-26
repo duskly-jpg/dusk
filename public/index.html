@@ -147,7 +147,7 @@
             <div class="kpi"><div class="v">{{ kpi.occupied }}/{{ kpi.unitTotal }}</div><div class="k">在租 / 总房间</div></div>
             <div class="kpi" :class="{ warn: kpi.overdue > 0 }"><div class="v">{{ kpi.overdue }}</div><div class="k">逾期未缴账单</div></div>
           </div>
-          <t-table row-key="ym" :data="recent" :columns="recentCols" title="最近收支流水"/>
+          <t-table row-key="id" :data="recent" :columns="recentCols" title="最近收支流水"/>
         </div>
 
         <!-- 楼栋 -->
@@ -627,8 +627,8 @@ createApp({
       if (b.code===0) { kpi.occupied = b.data.reduce((s,x)=>s+x.unit_occupied,0); kpi.unitTotal = b.data.reduce((s,x)=>s+x.unit_total,0); }
       if (rep.code===0) { kpi.income = rep.data.rows.reduce((s,x)=>s+x.income,0); kpi.expense = rep.data.rows.reduce((s,x)=>s+x.expense,0); kpi.profit = rep.data.profit; }
       if (led.code===0) kpi.overdue = led.data.overdue_count;
-      const r2 = await api.get('/report', { params: { year: reportYear.value } });
-      if (r2.code===0) recent.value = [];
+      const r2 = await api.get('/ledger', { params: { limit: 8 } });
+      if (r2.code===0) recent.value = r2.data;
     }
     const occupiedUnits = computed(() => units.value.filter(u => u.status === 'occupied'));
     const openPeriods = computed(() => periods.value.filter(p => !p.settled));

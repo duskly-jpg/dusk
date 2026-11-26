@@ -5,6 +5,10 @@
 [![ci](https://github.com/duskly-jpg/dusk/actions/workflows/ci.yml/badge.svg)](https://github.com/duskly-jpg/dusk/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/duskly-jpg/dusk)](LICENSE)
 
+| 登录 | 仪表盘 |
+|---|---|
+| ![登录](docs/screenshots/login.png) | ![仪表盘](docs/screenshots/dashboard.png) |
+
 ## 功能
 
 - **仪表盘**：楼 / 房 / 客 KPI、本月收支、应收账款一眼清
